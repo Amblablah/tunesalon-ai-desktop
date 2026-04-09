@@ -1,0 +1,104 @@
+app:
+  name: "TuneSalon Desktop"
+  version: "0.1.0"
+  port: 8765
+
+paths:
+  # %APPDATA%/TuneSalonDesktop/ is resolved at runtime
+  models_dir: "models"
+  adapters_dir: "adapters"
+  gguf_dir: "gguf"
+  embeddings_dir: "embeddings"
+  chat_db: "chat.db"
+  settings_file: "settings.json"
+
+training_defaults:
+  lora_r: 16
+  lora_alpha: 32
+  learning_rate: 0.0001
+  num_epochs: 3
+  batch_size: 1
+  gradient_accumulation_steps: 4
+  max_seq_length: 2048
+  fp16: true
+  bf16: false
+
+supported_models:
+  # Curated "quick start" list — permissively licensed, dense, text-only
+  # Users can also search HF for anything else
+  - name: "Qwen/Qwen2.5-1.5B-Instruct"
+    parameters: "1.5B"
+    vram_training_gb: 4
+    vram_inference_gb: 2
+    license: "Apache 2.0"
+    description: "Smallest model, runs on almost any GPU"
+  - name: "microsoft/Phi-4-mini-instruct"
+    parameters: "3.8B"
+    vram_training_gb: 8
+    vram_inference_gb: 4
+    license: "MIT"
+    description: "Great for learning, fits most GPUs"
+  - name: "Qwen/Qwen3-4B"
+    parameters: "4B"
+    vram_training_gb: 10
+    vram_inference_gb: 8
+    license: "Apache 2.0"
+    description: "Strong multilingual small model"
+  - name: "mistralai/Mistral-7B-Instruct-v0.3"
+    parameters: "7B"
+    vram_training_gb: 16
+    vram_inference_gb: 14
+    license: "Apache 2.0"
+    description: "Popular general-purpose model"
+  - name: "Qwen/Qwen3-8B"
+    parameters: "8B"
+    vram_training_gb: 14
+    vram_inference_gb: 8
+    license: "Apache 2.0"
+    description: "Strong 8B model for general tasks"
+  - name: "microsoft/phi-4"
+    parameters: "14B"
+    vram_training_gb: 22
+    vram_inference_gb: 14
+    license: "MIT"
+    description: "High quality, needs 24GB+ GPU for training"
+  - name: "Qwen/Qwen3-14B"
+    parameters: "14B"
+    vram_training_gb: 24
+    vram_inference_gb: 14
+    license: "Apache 2.0"
+    description: "Best quality at 14B, needs 24GB+ GPU for training"
+  - name: "mistralai/Mistral-Small-24B-Instruct-2501"
+    parameters: "24B"
+    vram_training_gb: 40
+    vram_inference_gb: 24
+    license: "Apache 2.0"
+    description: "Powerful 24B model, needs 48GB+ GPU for training"
+known_architectures:
+  good:
+    - "LlamaForCausalLM"
+    - "MistralForCausalLM"
+    - "Qwen2ForCausalLM"
+    - "PhiForCausalLM"
+    - "Phi3ForCausalLM"
+    - "GemmaForCausalLM"
+    - "Gemma2ForCausalLM"
+  bad_moe:
+    - "MixtralForCausalLM"
+    - "Qwen2MoeForCausalLM"
+  bad_vlm:
+    - "LlavaForConditionalGeneration"
+    - "Qwen2VLForConditionalGeneration"
+
+gguf_export:
+  llama_cpp_path: "llama_cpp"  # Relative to project root, or set LLAMA_CPP_PATH env var
+  default_quantization: "Q4_K_M"
+  available:
+    - "Q8_0"
+    - "Q5_K_M"
+    - "Q4_K_M"
+    - "Q2_K"
+
+dataset_format:
+  type: "jsonl"
+  schema: '{"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}'

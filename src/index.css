@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tailwind v4 preflight doesn't set cursor:pointer on buttons */
+button, [role="button"] {
+  cursor: pointer;
+}
+
+/* ── 21st.dev Earthy / Parchment Theme ─────────────────────────────── */
+@theme {
+  /* Typography — IBM Plex family */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Gray → Warm earthy browns */
+  --color-gray-50:  #f5f1e6;
+  --color-gray-100: #ece5d8;
+  --color-gray-200: #dbd0ba;
+  --color-gray-300: #d4c8aa;
+  --color-gray-400: #b8a88e;
+  --color-gray-500: #9c8b72;
+  --color-gray-600: #7d6b56;
+  --color-gray-700: #5c4d3f;
+  --color-gray-800: #4a4039;
+  --color-gray-900: #3a322c;
+  --color-gray-950: #2d2621;
+
+  /* Indigo → Copper / Bronze (primary accent) */
+  --color-indigo-50:  #faf6ef;
+  --color-indigo-100: #f0e6d4;
+  --color-indigo-200: #e2d0b0;
+  --color-indigo-300: #d4b88c;
+  --color-indigo-400: #c0a080;
+  --color-indigo-500: #a67c52;
+  --color-indigo-600: #8d6e4c;
+  --color-indigo-700: #735a3a;
+  --color-indigo-800: #5c472e;
+  --color-indigo-900: #4a3923;
+  --color-indigo-950: #2d2318;
+
+  /* Blue → Warm teal-brown (secondary accent) */
+  --color-blue-50:  #f5f0e8;
+  --color-blue-100: #e8dcc8;
+  --color-blue-200: #d4c4a4;
+  --color-blue-300: #c0a880;
+  --color-blue-400: #b09468;
+  --color-blue-500: #997a4e;
+  --color-blue-600: #826842;
+  --color-blue-700: #6b5636;
+  --color-blue-800: #54442a;
+  --color-blue-900: #3d3220;
+  --color-blue-950: #261f14;
+
+  /* Red → Terracotta */
+  --color-red-50:  #faf2ed;
+  --color-red-100: #f5e0d4;
+  --color-red-200: #e8bfaa;
+  --color-red-300: #da9e80;
+  --color-red-400: #cc7d56;
+  --color-red-500: #b54a35;
+  --color-red-600: #994030;
+  --color-red-700: #7d3428;
+  --color-red-800: #612820;
+  --color-red-900: #4a1f18;
+  --color-red-950: #2d1210;
+
+  /* Green → Sage / Olive */
+  --color-green-50:  #f4f3ec;
+  --color-green-100: #e4e5d2;
+  --color-green-200: #c8d0a6;
+  --color-green-300: #a8b47c;
+  --color-green-400: #8a9a5c;
+  --color-green-500: #6d7e40;
+  --color-green-600: #566634;
+  --color-green-700: #3f4c28;
+  --color-green-800: #2e3820;
+  --color-green-900: #232a1a;
+  --color-green-950: #171c12;
+
+  /* Yellow → Warm gold */
+  --color-yellow-50:  #fdf8eb;
+  --color-yellow-100: #f5ead0;
+  --color-yellow-200: #ecd8a8;
+  --color-yellow-300: #e0c280;
+  --color-yellow-400: #d4ac58;
+  --color-yellow-500: #c89838;
+  --color-yellow-600: #a07828;
+  --color-yellow-700: #7d5c20;
+  --color-yellow-800: #5c4418;
+  --color-yellow-900: #3a2c10;
+  --color-yellow-950: #241c0a;
+
+  /* Amber → Rich amber */
+  --color-amber-50:  #fdf6e8;
+  --color-amber-100: #f5e4c0;
+  --color-amber-200: #ecd098;
+  --color-amber-300: #e0b870;
+  --color-amber-400: #d4a048;
+  --color-amber-500: #c08830;
+  --color-amber-600: #a07028;
+  --color-amber-700: #805820;
+  --color-amber-800: #604018;
+  --color-amber-900: #402c10;
+  --color-amber-950: #281c08;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+}
+
+/* ── Global micro-polish ──────────────────────────────────────────── */
+
+/* Smooth transitions on all interactive elements */
+button, a, input, select, textarea {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Headings use the mono font for that programmatic feel */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-mono);
+}
+
+/* Nav links use mono font */
+nav a, nav button, nav span {
+  font-family: var(--font-mono);
+}
+
+/* ── Custom scrollbar — matches earthy/parchment theme ──────────────── */
+
+/* Webkit (Chrome, Edge, Tauri WebView) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-400);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--color-gray-700);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-600);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-300) transparent;
+}
+.dark * {
+  scrollbar-color: var(--color-gray-700) transparent;
+}
+
+/* ── Indeterminate progress bar — animated stripes ──────────────────── */
+@keyframes progress-stripes {
+  from { background-position: 1rem 0; }
+  to { background-position: 0 0; }
+}

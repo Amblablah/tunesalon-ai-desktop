@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicovank/tauri-docs/master/docs/.vitepress/public/schemas/config.schema.json",
+  "productName": "TuneSalon Desktop",
+  "version": "0.1.0",
+  "identifier": "com.tunesalon.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:8765 http://127.0.0.1:8765 https://huggingface.co https://*.huggingface.co; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
+    },
+    "windows": [
+      {
+        "title": "TuneSalon Desktop",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "headerImage": null,
+        "sidebarImage": null
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      }
+    },
+    "shortDescription": "Local AI fine-tuning and chat",
+    "longDescription": "TuneSalon Desktop lets you fine-tune AI models and chat with them locally on your own GPU. No cloud, no accounts, complete privacy.",
+    "copyright": "2026 TuneSalon",
+    "category": "DeveloperTool",
+    "resources": []
+  }
+}

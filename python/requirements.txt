@@ -1,0 +1,33 @@
+# Core ML
+torch>=2.2.0
+transformers>=4.40.0
+datasets>=2.18.0
+peft>=0.10.0
+trl>=0.8.0
+accelerate>=0.28.0
+
+# API
+fastapi>=0.110.0
+uvicorn>=0.29.0
+python-multipart>=0.0.9
+
+# GGUF inference
+llama-cpp-python>=0.2.50
+
+# RAG
+pypdf>=4.0.0
+python-docx>=1.1.0
+docling>=2.0.0
+faiss-cpu>=1.8.0
+sentence-transformers>=2.5.0
+
+# Export
+gguf>=0.6.0
+fpdf2>=2.7.0
+
+# Utilities
+psutil>=5.9.0
+pyyaml>=6.0
+aiofiles>=23.2.0
+aiosqlite>=0.20.0
+huggingface-hub>=0.20.0

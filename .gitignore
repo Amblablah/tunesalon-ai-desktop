@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri
+src-tauri/target/
+
+# Python sidecar
+python/__pycache__/
+python/**/__pycache__/
+*.pyc
+python/dist/
+python/build/
+
+# Build outputs
+installer_dist/
+*.exe
+
+# Tauri auto-generated
+src-tauri/gen/
+
+# Environment
+.env
+.env.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+Thumbs.db
+.DS_Store

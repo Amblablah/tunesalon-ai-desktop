@@ -1,0 +1,15 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for TuneSalon Desktop",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "shell:default",
+    "shell:allow-open"
+  ]
+}
