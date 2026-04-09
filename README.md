@@ -9,6 +9,8 @@ TuneSalon AI Desktop is an open-source desktop application that lets anyone crea
 
 [Download the Windows installer (v0.1.0)](https://github.com/Amblablah/tunesalon-ai-desktop/releases/download/v0.1.0/TuneSalon-Desktop-0.1.0-setup.exe)
 
+Note: Windows SmartScreen may show a warning because the installer is not code-signed. Click "More info" then "Run anyway" to proceed. The source code is fully open for review in this repository.
+
 
 ## Features
 
