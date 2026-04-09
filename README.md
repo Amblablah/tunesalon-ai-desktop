@@ -5,6 +5,11 @@ Fine-tune AI models on your own computer. No coding required. Your data stays on
 TuneSalon AI Desktop is an open-source desktop application that lets anyone create custom AI models through fine-tuning. Upload your training data, pick a model, click train, and chat with your custom AI. Everything runs locally on your GPU.
 
 
+## Download
+
+[Download the Windows installer (v0.1.0)](https://github.com/Amblablah/tunesalon-ai-desktop/releases/download/v0.1.0/TuneSalon-Desktop-0.1.0-setup.exe)
+
+
 ## Features
 
 - Train custom AI adapters on your own data (LoRA fine-tuning)
