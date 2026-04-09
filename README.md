@@ -59,7 +59,7 @@ pip install transformers peft trl accelerate datasets safetensors sentence-trans
 
 1. Clone the repository:
 ```
-git clone https://github.com/your-username/tunesalon-ai-desktop.git
+git clone https://github.com/Amblablah/tunesalon-ai-desktop.git
 cd tunesalon-ai-desktop
 ```
 
