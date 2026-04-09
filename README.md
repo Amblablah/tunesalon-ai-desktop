@@ -34,6 +34,11 @@ All models are permissively licensed (Apache 2.0 or MIT), text-only, and dense:
 | mistralai/Mistral-Small-24B-Instruct-2501 | 24B | Apache 2.0 | 40 GB |
 
 
+## Platform
+
+Windows only at this time. macOS and Linux support planned for a future release.
+
+
 ## Prerequisites
 
 - Windows 10/11
