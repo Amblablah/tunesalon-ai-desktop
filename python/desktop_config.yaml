@@ -1,6 +1,6 @@
 app:
   name: "TuneSalon Desktop"
-  version: "0.1.0"
+  version: "0.1.1"
   port: 8765
 
 paths:

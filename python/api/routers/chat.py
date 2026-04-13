@@ -339,11 +339,12 @@ async def send_message(req: ChatRequest):
                 if _rag_engine and _rag_engine.has_documents():
                     from core.rag import RAGEngine
                     _RAG_CHAR_BUDGET = 12_000
+                    _has_adapter = bool(_loaded_adapters)
                     # Append RAG rules to system prompt (adapter-compatible)
-                    rag_sys = RAGEngine.get_system_instruction()
+                    rag_sys = RAGEngine.get_system_instruction(has_adapter=_has_adapter)
                     system_prompt = system_prompt + "\n\n" + rag_sys if system_prompt else rag_sys
                     # Build user context with budget-aware truncation
-                    rag_context = _rag_engine.build_rag_context(req.message, char_budget=_RAG_CHAR_BUDGET)
+                    rag_context = _rag_engine.build_rag_context(req.message, char_budget=_RAG_CHAR_BUDGET, has_adapter=_has_adapter)
                     if rag_context:
                         chat_message = rag_context + "\n\n" + req.message
 

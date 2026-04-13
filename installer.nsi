@@ -6,7 +6,7 @@
 
 ; General
 Name "TuneSalon Desktop"
-OutFile "TuneSalon-Desktop-0.1.0-setup.exe"
+OutFile "TuneSalon-Desktop-0.1.1-setup.exe"
 InstallDir "$LOCALAPPDATA\TuneSalon Desktop"
 RequestExecutionLevel user
 
@@ -52,7 +52,7 @@ SectionGroup /e "Required" SecGrpRequired
         WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\TuneSalon Desktop" "UninstallString" '"$INSTDIR\uninstall.exe"'
         WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\TuneSalon Desktop" "DisplayIcon" "$INSTDIR\TuneSalon Desktop.exe"
         WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\TuneSalon Desktop" "Publisher" "TuneSalon"
-        WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\TuneSalon Desktop" "DisplayVersion" "0.1.0"
+        WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\TuneSalon Desktop" "DisplayVersion" "0.1.1"
     SectionEnd
 
     Section "Python 3.10+" SecPython

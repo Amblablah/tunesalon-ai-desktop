@@ -4,7 +4,7 @@
 
 **Option 1: Run the installer**
 ```
-Double-click: TuneSalon-Desktop-0.1.0-setup.exe
+Double-click: TuneSalon-Desktop-0.1.1-setup.exe
 ```
 Installs to `%LOCALAPPDATA%\TuneSalon Desktop\`. Creates Start Menu + Desktop shortcuts.
 

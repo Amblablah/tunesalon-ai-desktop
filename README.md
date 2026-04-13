@@ -7,7 +7,7 @@ TuneSalon AI Desktop is an open-source desktop application that lets anyone crea
 
 ## Download
 
-[Download the Windows installer (v0.1.0)](https://github.com/Amblablah/tunesalon-ai-desktop/releases/download/v0.1.0/TuneSalon-Desktop-0.1.0-setup.exe)
+[Download the Windows installer (v0.1.1)](https://github.com/Amblablah/tunesalon-ai-desktop/releases/download/v0.1.1/TuneSalon-Desktop-0.1.1-setup.exe)
 
 Note: Windows SmartScreen may show a warning because the installer is not code-signed. Click "More info" then "Run anyway" to proceed. The source code is fully open for review in this repository.
 
@@ -63,7 +63,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu130
 
 Install the ML dependencies:
 ```
-pip install transformers peft trl accelerate datasets safetensors sentence-transformers
+pip install transformers peft trl accelerate datasets safetensors sentence-transformers rank_bm25 chardet
 ```
 
 
@@ -128,7 +128,7 @@ bash build_installer.sh
 makensis installer.nsi
 ```
 
-The installer will be created as `TuneSalon-Desktop-0.1.0-setup.exe`.
+The installer will be created as `TuneSalon-Desktop-0.1.1-setup.exe`.
 
 
 ## GGUF Export

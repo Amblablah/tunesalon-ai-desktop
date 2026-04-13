@@ -99,13 +99,15 @@ class DocumentInfo:
 # Text Extraction
 # ============================================================
 
-def extract_text(file_path: str, file_type: str) -> List[DocumentPage]:
+def extract_text(file_path: str, file_type: str, display_name: Optional[str] = None) -> List[DocumentPage]:
     """
     Extract text from a document file.
 
     Args:
         file_path: Path to the document file.
         file_type: One of 'pdf', 'docx', 'txt'.
+        display_name: Optional real filename to use in page metadata
+            (useful when processing from a temp file).
 
     Returns:
         List of DocumentPage objects with text and page numbers.
@@ -114,7 +116,7 @@ def extract_text(file_path: str, file_type: str) -> List[DocumentPage]:
         ValueError: If file_type is unsupported or file cannot be read.
     """
     file_type = file_type.lower().strip(".")
-    filename = os.path.basename(file_path)
+    filename = display_name or os.path.basename(file_path)
 
     if file_type == "pdf":
         return _extract_pdf(file_path, filename)
@@ -433,16 +435,43 @@ def _extract_docx(file_path: str, filename: str) -> List[DocumentPage]:
 
 
 def _extract_txt(file_path: str, filename: str) -> List[DocumentPage]:
-    """Read text file with encoding detection (utf-8, latin-1 fallback)."""
+    """Read text file with encoding detection.
+
+    Tries utf-8 first (most common), then uses chardet to detect encoding,
+    with latin-1 as a last-resort fallback (accepts any byte sequence).
+    """
     text = None
 
-    for encoding in ["utf-8", "latin-1"]:
+    # Fast path: try utf-8 first (covers the vast majority of files)
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except (UnicodeDecodeError, UnicodeError):
+        pass
+
+    # Detect encoding with chardet if utf-8 failed
+    if text is None:
         try:
-            with open(file_path, "r", encoding=encoding) as f:
+            import chardet
+            with open(file_path, "rb") as f:
+                raw = f.read()
+            detected = chardet.detect(raw)
+            encoding = detected.get("encoding")
+            if encoding:
+                try:
+                    text = raw.decode(encoding)
+                except (UnicodeDecodeError, LookupError):
+                    pass
+        except ImportError:
+            logger.debug("chardet not installed — falling back to latin-1")
+
+    # Last resort: latin-1 accepts any byte sequence
+    if text is None:
+        try:
+            with open(file_path, "r", encoding="latin-1") as f:
                 text = f.read()
-            break
         except (UnicodeDecodeError, UnicodeError):
-            continue
+            pass
 
     if text is None:
         raise ValueError(
@@ -871,9 +900,8 @@ def _get_overlap(text: str, overlap_size: int) -> str:
 # RAG Instructions (split: system prompt + user message)
 # ============================================================
 
-# System-level instruction — appended to the model's system prompt.
-# Fine-tuned adapters treat system prompt as their "identity", making these
-# rules much harder to override than instructions buried in the user message.
+# System-level instruction for BASE MODELS (no adapter loaded).
+# Includes citation rules — base models follow instructions well.
 RAG_SYSTEM_INSTRUCTION = (
     "The user has uploaded reference documents. The relevant content from those "
     "documents is provided in their messages between '--- DOCUMENT EXCERPTS ---' "
@@ -892,10 +920,26 @@ RAG_SYSTEM_INSTRUCTION = (
     "6. If the documents don't cover the topic, say so clearly."
 )
 
+# Lighter instruction for ADAPTER-loaded chat.
+# No citation rules — citation instructions can conflict with the adapter's
+# fine-tuned style and degrade output quality.
+RAG_ADAPTER_INSTRUCTION = (
+    "The user has uploaded reference documents. The relevant content from those "
+    "documents is provided in their messages between '--- DOCUMENT EXCERPTS ---' "
+    "and '--- END OF EXCERPTS ---'. Use this content to inform your answer. "
+    "If the documents don't cover the topic, say so clearly."
+)
+
 # Lighter preamble for the user message (main rules are in system prompt)
 RAG_USER_PREAMBLE = (
     "Here is the relevant content from my uploaded documents. "
     "Answer using this content and cite each fact as [filename, Page X]."
+)
+
+# Lighter user preamble when adapter is loaded (no citation demand)
+RAG_ADAPTER_USER_PREAMBLE = (
+    "Here is the relevant content from my uploaded documents. "
+    "Answer using this content."
 )
 
 
@@ -930,6 +974,33 @@ def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
 
 
 # ============================================================
+# Cross-Encoder Re-ranker (shared globally, loaded once)
+# ============================================================
+
+_reranker_model = None
+_reranker_model_name = None
+
+
+def _get_reranker_model(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+    """
+    Get or lazy-load the shared cross-encoder re-ranker model.
+    Lightweight (~80MB) — re-scores query-chunk pairs for better precision.
+    """
+    global _reranker_model, _reranker_model_name
+
+    if _reranker_model is not None and _reranker_model_name == model_name:
+        return _reranker_model
+
+    logger.info(f"Loading re-ranker model '{model_name}'...")
+    from sentence_transformers import CrossEncoder
+
+    _reranker_model = CrossEncoder(model_name)
+    _reranker_model_name = model_name
+    logger.info("Re-ranker model loaded successfully.")
+    return _reranker_model
+
+
+# ============================================================
 # RAG Engine
 # ============================================================
 
@@ -960,6 +1031,7 @@ class RAGEngine:
         self._chunks: List[DocumentChunk] = []         # All chunks across all docs
         self._embeddings = None                         # numpy array of shape (n_chunks, dim)
         self._faiss_index = None                        # FAISS index
+        self._bm25_index = None                         # BM25 index (keyword retrieval)
         self._documents: dict[str, DocumentInfo] = {}   # filename -> DocumentInfo
         self._pages: dict[str, List[DocumentPage]] = {} # filename -> original pages (for small-doc path)
         self._total_chars: int = 0                      # Total chars across all docs
@@ -969,35 +1041,38 @@ class RAGEngine:
         return _get_embedding_model(self._model_name)
 
     @staticmethod
-    def get_system_instruction() -> str:
+    def get_system_instruction(has_adapter: bool = False) -> str:
         """Return RAG instruction to append to the model's system prompt.
 
-        Putting rules in the system prompt makes fine-tuned adapters follow
-        them more reliably than instructions buried in the user message.
+        Base models get full citation rules. Adapter-loaded chat gets a
+        lighter instruction without citation demands, since citation rules
+        can conflict with the adapter's fine-tuned response style.
         """
-        return RAG_SYSTEM_INSTRUCTION
+        return RAG_ADAPTER_INSTRUCTION if has_adapter else RAG_SYSTEM_INSTRUCTION
 
-    def add_document(self, file_path: str, file_type: str) -> DocumentInfo:
+    def add_document(self, file_path: str, file_type: str, display_name: Optional[str] = None) -> DocumentInfo:
         """
         Process a document: extract text → chunk → embed → add to FAISS index.
 
         Args:
             file_path: Path to the document file.
             file_type: One of 'pdf', 'docx', 'txt'.
+            display_name: Optional real filename to use instead of the file_path
+                basename (useful when processing from a temp file).
 
         Returns:
             DocumentInfo with summary for UI display.
         """
         import numpy as np
 
-        filename = os.path.basename(file_path)
+        filename = display_name or os.path.basename(file_path)
 
         # Check for duplicate
         if filename in self._documents:
             raise ValueError(f"'{filename}' is already loaded. Remove it first to re-upload.")
 
-        # Extract text
-        pages = extract_text(file_path, file_type)
+        # Extract text (pass display_name so pages carry the real filename)
+        pages = extract_text(file_path, file_type, display_name=filename)
         total_chars = sum(len(p.text) for p in pages)
 
         # Chunk the document
@@ -1019,6 +1094,9 @@ class RAGEngine:
         self._chunks.extend(chunks)
         self._pages[filename] = pages
         self._total_chars += total_chars
+
+        # Rebuild BM25 index with all chunks
+        self._rebuild_bm25()
 
         info = DocumentInfo(
             filename=filename,
@@ -1082,6 +1160,9 @@ class RAGEngine:
         # Rebuild FAISS index from remaining embeddings
         self._rebuild_index(keep_indices)
 
+        # Rebuild BM25 index with remaining chunks
+        self._rebuild_bm25()
+
         logger.info(f"Removed '{filename}'. Remaining docs: {len(self._documents)}")
 
     def _rebuild_index(self, keep_indices: List[int]):
@@ -1099,14 +1180,35 @@ class RAGEngine:
         self._faiss_index = faiss.IndexFlatIP(dim)
         self._faiss_index.add(self._embeddings)
 
+    def _rebuild_bm25(self):
+        """Rebuild the BM25 index from the current chunk list.
+
+        Called after add_document() and remove_document(). BM25 indexes
+        tokenized chunk text for keyword-based retrieval alongside FAISS.
+        """
+        if not self._chunks:
+            self._bm25_index = None
+            return
+
+        from rank_bm25 import BM25Okapi
+
+        # Tokenize: lowercase, split on non-word chars, keep tokens >= 2 chars
+        tokenized = [
+            [w for w in re.findall(r'\w+', chunk.text.lower()) if len(w) >= 2]
+            for chunk in self._chunks
+        ]
+        self._bm25_index = BM25Okapi(tokenized)
+
     def search(self, query: str, top_k: int = 12) -> List[RetrievedChunk]:
         """
-        Hybrid search: FAISS semantic similarity + keyword boosting.
+        Hybrid search: FAISS semantic + BM25 keyword + header/page boosting,
+        followed by cross-encoder re-ranking.
 
-        1. FAISS returns the top candidates ranked by embedding similarity.
-        2. Keyword boost: chunks containing exact query words get a score bump,
-           so content with matching terminology isn't lost to purely semantic
-           ranking.
+        1. FAISS returns semantic similarity scores for all chunks.
+        2. BM25 provides keyword-based relevance scores.
+        3. Header and page reference boosts rescue structurally relevant chunks.
+        4. Scores are combined, top candidates selected.
+        5. Cross-encoder re-ranks the top candidates for final precision.
 
         Args:
             query: The user's question.
@@ -1124,79 +1226,93 @@ class RAGEngine:
         query_embedding = model.encode([query], show_progress_bar=False, normalize_embeddings=True)
         query_embedding = np.array(query_embedding, dtype=np.float32)
 
+        # ── Stage 1: FAISS semantic scores ──────────────────────────────
         # Search ALL chunks — small index, so brute-force is fine and ensures
-        # keyword/header boosting can rescue chunks that FAISS ranked low.
+        # BM25/header boosting can rescue chunks that FAISS ranked low.
         candidates_k = len(self._chunks)
-        scores, indices = self._faiss_index.search(query_embedding, candidates_k)
+        faiss_scores, faiss_indices = self._faiss_index.search(query_embedding, candidates_k)
 
-        # Extract meaningful query keywords (>= 3 chars, lowercased)
+        # Build a map: chunk_index -> FAISS score
+        faiss_score_map: dict[int, float] = {}
+        for score, idx in zip(faiss_scores[0], faiss_indices[0]):
+            if 0 <= idx < len(self._chunks):
+                faiss_score_map[int(idx)] = float(score)
+
+        # ── Stage 2: BM25 keyword scores ────────────────────────────────
+        bm25_score_map: dict[int, float] = {}
+        if self._bm25_index is not None:
+            query_tokens = [w for w in re.findall(r'\w+', query.lower()) if len(w) >= 2]
+            if query_tokens:
+                bm25_raw = self._bm25_index.get_scores(query_tokens)
+                # Normalize BM25 scores to [0, 1] range for fair combination
+                bm25_max = float(max(bm25_raw)) if max(bm25_raw) > 0 else 1.0
+                for i, raw_score in enumerate(bm25_raw):
+                    bm25_score_map[i] = float(raw_score) / bm25_max
+
+        # ── Stage 3: Header + page boosts ───────────────────────────────
         query_lower = query.lower()
         query_words = [w for w in re.findall(r'\w+', query_lower) if len(w) >= 3]
 
-        # Build multi-word phrases from query for section header matching
-        # e.g., "dark magic" from "list all dark magic spells"
+        # Multi-word phrases for section header matching
         query_phrases = []
         if len(query_words) >= 2:
             for i in range(len(query_words) - 1):
                 query_phrases.append(f"{query_words[i]} {query_words[i + 1]}")
 
-        # Also detect page references like "page 84"
+        # Page references like "page 84"
         page_refs = re.findall(r'page\s*(\d+)', query_lower)
 
+        # ── Stage 4: Combine all scores ─────────────────────────────────
+        # Weights: FAISS (semantic) 0.6, BM25 (keyword) 0.25, header/page 0.15
         candidates = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx < 0 or idx >= len(self._chunks):
-                continue
+        for idx in range(len(self._chunks)):
             chunk = self._chunks[idx]
-            chunk_lower = chunk.text.lower()
 
-            # Keyword boost: fraction of query words found in chunk
-            if query_words:
-                keyword_hits = sum(1 for w in query_words if w in chunk_lower)
-                keyword_ratio = keyword_hits / len(query_words)
-            else:
-                keyword_ratio = 0.0
+            faiss_score = faiss_score_map.get(idx, 0.0)
+            bm25_score = bm25_score_map.get(idx, 0.0)
 
-            # Section header boost: if query matches the chunk's ## header,
-            # this is almost certainly the right chunk. Much stronger than keyword.
-            # Normalize whitespace (Docling sometimes outputs "Dark  Magic" with
-            # double spaces) before comparing.
+            # Section header boost
             header_boost = 0.0
             first_line = chunk.text.split('\n')[0].strip().lower()
             if first_line.startswith('#'):
                 header_text = ' '.join(re.sub(r'[^\w\s]', '', re.sub(r'^#+\s*', '', first_line)).split())
-                # Multi-word phrase match (e.g., "dark magic" → "## Dark Magic")
                 for phrase in query_phrases:
                     if phrase in header_text:
                         header_boost = 0.5
                         break
-                # Single keyword matches full header (e.g., "necromancy" → "## Necromancy")
                 if header_boost == 0.0:
                     for w in query_words:
                         if w == header_text or header_text.startswith(w + ' ') or header_text.endswith(' ' + w):
                             header_boost = 0.4
                             break
 
-            # Page reference boost: if user asks about a specific page
+            # Page reference boost
             page_boost = 0.0
             if page_refs:
                 for page_num_str in page_refs:
                     if chunk.page_number == int(page_num_str):
                         page_boost = 0.15
 
-            # Combined score: semantic + keyword + header + page
-            boosted_score = float(score) + (keyword_ratio * 0.15) + header_boost + page_boost
+            combined = (faiss_score * 0.6) + (bm25_score * 0.25) + header_boost + page_boost
 
             candidates.append(RetrievedChunk(
                 text=chunk.text,
                 page_number=chunk.page_number,
                 source_file=chunk.source_file,
-                similarity_score=boosted_score,
+                similarity_score=combined,
             ))
 
-        # Re-rank by boosted score and return top_k
+        # Sort by combined score, take top candidates for re-ranking
         candidates.sort(key=lambda c: c.similarity_score, reverse=True)
-        top_results = candidates[:top_k]
+
+        # Take more candidates than top_k for re-ranking (re-ranker may reshuffle)
+        rerank_pool_size = min(top_k * 2, len(candidates))
+        rerank_pool = candidates[:rerank_pool_size]
+
+        # ── Stage 5: Cross-encoder re-ranking ───────────────────────────
+        rerank_pool = self._rerank(query, rerank_pool)
+
+        top_results = rerank_pool[:top_k]
 
         # Sibling chunk expansion: if a chunk's section header (## ...) is in the
         # results, include ALL chunks with the same header. This ensures multi-chunk
@@ -1261,15 +1377,54 @@ class RAGEngine:
         return top_results
 
     @staticmethod
+    def _rerank(query: str, chunks: List[RetrievedChunk]) -> List[RetrievedChunk]:
+        """Re-rank chunks using a cross-encoder model for better precision.
+
+        Cross-encoders score (query, chunk) pairs jointly — more accurate than
+        bi-encoder similarity but too slow to run on all chunks. We run it on
+        the pre-filtered candidate pool (typically 2x top_k).
+
+        Falls back gracefully if the re-ranker fails to load (returns original order).
+        """
+        if len(chunks) <= 1:
+            return chunks
+
+        try:
+            reranker = _get_reranker_model()
+        except Exception as e:
+            logger.warning(f"Re-ranker unavailable, using original ranking: {e}")
+            return chunks
+
+        pairs = [(query, chunk.text) for chunk in chunks]
+        try:
+            rerank_scores = reranker.predict(pairs, show_progress_bar=False)
+        except Exception as e:
+            logger.warning(f"Re-ranking failed, using original ranking: {e}")
+            return chunks
+
+        # Replace scores with cross-encoder scores and re-sort
+        reranked = []
+        for chunk, score in zip(chunks, rerank_scores):
+            reranked.append(RetrievedChunk(
+                text=chunk.text,
+                page_number=chunk.page_number,
+                source_file=chunk.source_file,
+                similarity_score=float(score),
+            ))
+        reranked.sort(key=lambda c: c.similarity_score, reverse=True)
+        return reranked
+
+    @staticmethod
     def _filter_by_relevance_gap(
         results: List[RetrievedChunk],
-        gap_threshold: float = 0.3,
-        min_results: int = 2,
+        gap_threshold: float = 3.0,
+        min_results: int = 3,
     ) -> List[RetrievedChunk]:
         """Drop low-relevance filler chunks when there's a clear score gap.
 
-        If the top results score 0.9+ and then scores drop to 0.3, the low
-        scorers are unrelated filler that would confuse the model. Cut them.
+        Cross-encoder re-ranking produces scores in roughly [-12, +6] range.
+        A gap of 3.0 catches the boundary between relevant content (scores
+        clustered together) and unrelated filler (scores dropping sharply).
 
         Always keeps at least min_results chunks. After that, cuts at the
         first gap exceeding gap_threshold.
@@ -1285,7 +1440,7 @@ class RAGEngine:
 
         return results
 
-    def build_rag_context(self, query: str, top_k: int = 12, char_budget: int = 12_000) -> str:
+    def build_rag_context(self, query: str, top_k: int = 12, char_budget: int = 12_000, has_adapter: bool = False) -> str:
         """
         Build the RAG context string for the user message.
 
@@ -1303,6 +1458,7 @@ class RAGEngine:
             query: The user's question.
             top_k: Number of chunks to retrieve (search path only).
             char_budget: Maximum character budget for the entire context string.
+            has_adapter: If True, uses lighter preamble without citation demands.
 
         Returns:
             Ready-to-inject string with preamble + document excerpts.
@@ -1310,21 +1466,24 @@ class RAGEngine:
         if not self._documents:
             return ""
 
+        preamble = RAG_ADAPTER_USER_PREAMBLE if has_adapter else RAG_USER_PREAMBLE
         header = "--- DOCUMENT EXCERPTS ---"
         footer = "--- END OF EXCERPTS ---"
 
         # Calculate space available for actual excerpts
-        overhead = len(RAG_USER_PREAMBLE) + len(header) + len(footer) + 8  # newlines
+        overhead = len(preamble) + len(header) + len(footer) + 8  # newlines
         available = char_budget - overhead
 
         if available < 500:
             return ""  # Budget too small to be useful
 
-        # Small-doc path: include all text if it fits in budget
-        if self._total_chars < _SMALL_DOC_CHAR_THRESHOLD:
+        # Small-doc path: include all text if it fits in budget.
+        # Only use this shortcut for ≤3 documents — with many small docs,
+        # search + relevance filtering gives better results than dumping everything.
+        if self._total_chars < _SMALL_DOC_CHAR_THRESHOLD and len(self._documents) <= 3:
             all_text = "\n".join(self._format_all_pages())
             if len(all_text) <= available:
-                return f"{RAG_USER_PREAMBLE}\n\n{header}\n\n{all_text}\n\n{footer}"
+                return f"{preamble}\n\n{header}\n\n{all_text}\n\n{footer}"
             # Doesn't fit — fall through to search path
 
         # Search path: retrieve + format chunks until budget is filled
@@ -1352,7 +1511,7 @@ class RAGEngine:
             return ""
 
         excerpts_text = "\n\n".join(excerpts)
-        return f"{RAG_USER_PREAMBLE}\n\n{header}\n\n{excerpts_text}\n\n{footer}"
+        return f"{preamble}\n\n{header}\n\n{excerpts_text}\n\n{footer}"
 
     @staticmethod
     def _format_source_block(text: str, filename: str, page_number: int) -> str:
@@ -1392,10 +1551,11 @@ class RAGEngine:
         return len(self._documents) > 0
 
     def clear(self):
-        """Reset all documents, chunks, and the FAISS index (session cleanup)."""
+        """Reset all documents, chunks, and indexes (session cleanup)."""
         self._chunks.clear()
         self._embeddings = None
         self._faiss_index = None
+        self._bm25_index = None
         self._documents.clear()
         self._pages.clear()
         self._total_chars = 0
